@@ -43,22 +43,38 @@ print("Columnas del dataset:", X.columns.tolist())
 # Dividir datos
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+#RandomForestClassifier metodo a usar
 # Cargar o entrenar modelo
 model_file = 'model.pkl'
+# Verificar si ya existe un modelo entrenado guardado en disco
 if os.path.exists(model_file):
+    # Si el modelo existe, lo cargamos desde el archivo para evitar reentrenamiento
     model = joblib.load(model_file)
 else:
+    # Si no existe un modelo previo, creamos una nueva instancia de RandomForestClassifier
     model = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=10,
-        class_weight='balanced',
-        random_state=42
+        n_estimators=100,  # Número de árboles en el bosque
+        max_depth=10,      # Profundidad máxima de cada árbol
+        class_weight='balanced',  # Ajusta pesos inversamente proporcionales a la frecuencia de clases
+        random_state=42    # Semilla para reproducibilidad de resultados
     )
+    # Entrenamos el modelo con los datos de entrenamiento
     model.fit(X_train, y_train)
+    # Guardamos el modelo entrenado en disco para uso futuro
     joblib.dump(model, model_file)
 
 # Evaluar modelo
 y_pred = model.predict(X_test)
+from sklearn.metrics import classification_report, precision_score
+
+# Calcular y guardar la precisión explícitamente
+precision = precision_score(y_test, y_pred, average='weighted') * 100
+print(f"\n===== PRECISIÓN DEL MODELO: {precision:.2f}% =====\n")
+
+# Guardar la precisión en una variable global para poder accederla desde la API
+model_precision = precision
+
+# Imprimir el reporte completo de clasificación
 print("Reporte de clasificación:\n", classification_report(y_test, y_pred))
 
 def get_recommendation(probability):
@@ -136,6 +152,15 @@ def predict_covid():
     except Exception as e:
         print(f"Error en /predict: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+# Después de la función predict_covid y antes de if __name__ == '__main__':
+@app.route('/model-info', methods=['GET'])
+def get_model_info():
+    """Endpoint para obtener información sobre el modelo entrenado"""
+    return jsonify({
+        'precision': round(model_precision, 2),
+        'message': f"El modelo tiene una precisión del {model_precision:.2f}%"
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
